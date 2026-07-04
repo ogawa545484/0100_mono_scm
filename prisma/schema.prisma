@@ -17,3 +17,10 @@ datasource db {
 generator client {
   provider = "prisma-client-js"
 }
+
+// schema.prisma の一番下に貼り付ける（練習用の仮テーブル）
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String?
+}
