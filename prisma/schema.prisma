@@ -12,9 +12,68 @@ datasource db {
   provider = "postgresql"
 }
 
-// schema.prisma の一番下に貼り付ける（練習用の仮テーブル）
-model User {
-  id    Int    @id @default(autoincrement())
-  email String @unique
-  name  String?
+// 1. 商品・部品マスタ（すべての基本となるアイテム）
+model Item {
+  id               String            @id @default(uuid())
+  name             String            // アイテム名（製品A、原材料X など）
+  isProduct        Boolean           // 製品フラグ（true: 完成品, false: 原材料・部品）
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // リレーション定義
+  orders           Order[]
+  inventories      Inventory[]
+  productionOrders ProductionOrder[]
+  
+  // BOM（部品構成表）用：親としてのリレーションと、子としてのリレーション
+  parentBoms       Bom[]             @relation("ParentItem")
+  childBoms        Bom[]             @relation("ChildItem")
+}
+
+// 2. 受注テーブル (Order)
+model Order {
+  id           String      @id @default(uuid())
+  itemId       String      // 注文された商品のID
+  quantity     Int         // 数量
+  dueDate      DateTime    // 納期
+  status       String      // ステータス（PENDING: 未引き当て, ALLOCATED: 引き当て済, SHIPPED: 出荷済 など）
+  createdAt    DateTime    @default(now())
+  
+  item         Item        @relation(fields: [itemId], references: [id])
+}
+
+// 3. 在庫テーブル (Inventory)
+model Inventory {
+  id           String      @id @default(uuid())
+  itemId       String      // アイテムID
+  quantity     Int         // 在庫数量
+  lotNumber    String?     // ロット番号（先入先出の制御用）
+  expirationDate DateTime? // 有効期限（フェーズ2の引き当てロジックで使用）
+  createdAt    DateTime    @default(now())
+
+  item         Item        @relation(fields: [itemId], references: [id])
+}
+
+// 4. 部品構成表テーブル (BOM: Bill of Materials)
+model Bom {
+  id           String      @id @default(uuid())
+  parentId     String      // 親アイテム（完成品）のID
+  childId      String      // 子アイテム（原材料・部品）のID
+  quantityRequired Int     // 親1つに対して必要な子の数量（製品Aが1つに原材料Xが2つなら「2」）
+
+  parentItem   Item        @relation("ParentItem", fields: [parentId], references: [id])
+  childItem    Item        @relation("ChildItem", fields: [childId], references: [id])
+
+  @@unique([parentId, childId]) // 同じ組み合わせの重複を防ぐ
+}
+
+// 5. 製造指示テーブル (ProductionOrder)
+model ProductionOrder {
+  id           String      @id @default(uuid())
+  itemId       String      // 製造する製品のID
+  quantity     Int         // 製造指示数量
+  status       String      // ステータス（PLANNED: 計画中, REQUESTED: 製造指示済, COMPLETED: 製造完了）
+  createdAt    DateTime    @default(now())
+
+  item         Item        @relation(fields: [itemId], references: [id])
 }
