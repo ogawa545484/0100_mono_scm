@@ -19,13 +19,14 @@ type Order = {
 export default function OrdersPage() {
   const [products, setProducts] = useState<Item[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  
+
   // フォームの状態
   const [selectedItemId, setSelectedItemId] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [allocatingId, setAllocatingId] = useState<string | null>(null); // 引き当て処理中の注文ID
 
   // 初期データ取得
   const fetchData = async () => {
@@ -45,7 +46,7 @@ export default function OrdersPage() {
     fetchData();
   }, []);
 
-  // 登録ハンドラー
+  // 受注登録ハンドラー
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -79,12 +80,80 @@ export default function OrdersPage() {
     }
   };
 
+  // 在庫引き当てハンドラー
+  const handleAllocate = async (orderId: string) => {
+    setError("");
+    setAllocatingId(orderId);
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}/allocate`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "引き当て処理に失敗しました");
+      }
+
+      const shortage = data.data.shortageQuantity;
+      if (shortage > 0) {
+        alert(`一部引き当てが完了しました。\n在庫が不足しています（不足数: ${shortage}個）。`);
+      } else {
+        alert("在庫の引き当てが正常に完了しました！");
+      }
+
+      // 最新状態へ更新
+      await fetchData();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAllocatingId(null);
+    }
+  };
+
+  // ステータスバッジの見た目を返すヘルパー関数
+  const renderStatusBadge = (status: string) => {
+    let bg = "#e2e8f0";
+    let color = "#475569";
+    let text = "未引き当て";
+
+    if (status === "PARTIAL") {
+      bg = "#fef3c7";
+      color = "#92400e";
+      text = "一部引き当て (在庫不足)";
+    } else if (status === "ALLOCATED") {
+      bg = "#dcfce7";
+      color = "#166534";
+      text = "引き当て完了";
+    }
+
+    return (
+      <span
+        style={{
+          padding: "4px 8px",
+          borderRadius: "4px",
+          backgroundColor: bg,
+          color: color,
+          fontSize: "0.85em",
+          fontWeight: "bold",
+        }}
+      >
+        {text}
+      </span>
+    );
+  };
+
   return (
-    <div style={{ padding: "30px", maxWidth: "800px", margin: "0 auto" }}>
+    <div style={{ padding: "30px", maxWidth: "900px", margin: "0 auto" }}>
       <h1>受注管理 (Order Phase)</h1>
 
       {/* エラー表示 */}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && (
+        <p style={{ color: "red", backgroundColor: "#fee2e2", padding: "10px", borderRadius: "4px" }}>
+          {error}
+        </p>
+      )}
 
       {/* 受注入力フォーム */}
       <section style={{ marginBottom: "40px", padding: "20px", border: "1px solid #ccc", borderRadius: "8px" }}>
@@ -160,6 +229,7 @@ export default function OrdersPage() {
                 <th style={{ padding: "8px" }}>数量</th>
                 <th style={{ padding: "8px" }}>納期</th>
                 <th style={{ padding: "8px" }}>ステータス</th>
+                <th style={{ padding: "8px" }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -171,17 +241,28 @@ export default function OrdersPage() {
                     {new Date(order.dueDate).toLocaleDateString()}
                   </td>
                   <td style={{ padding: "8px" }}>
-                    <span
-                      style={{
-                        padding: "2px 6px",
-                        borderRadius: "4px",
-                        backgroundColor: "#fff3cd",
-                        color: "#856404",
-                        fontSize: "0.9em",
-                      }}
-                    >
-                      {order.status}
-                    </span>
+                    {renderStatusBadge(order.status)}
+                  </td>
+                  <td style={{ padding: "8px" }}>
+                    {order.status !== "ALLOCATED" ? (
+                      <button
+                        onClick={() => handleAllocate(order.id)}
+                        disabled={allocatingId === order.id}
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: "#10b981",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.85em",
+                        }}
+                      >
+                        {allocatingId === order.id ? "処理中..." : "在庫引き当て実行"}
+                      </button>
+                    ) : (
+                      <span style={{ color: "#9ca3af", fontSize: "0.85em" }}>完了済</span>
+                    )}
                   </td>
                 </tr>
               ))}

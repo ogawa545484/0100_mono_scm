@@ -40,6 +40,7 @@ model Order {
   createdAt    DateTime    @default(now())
   
   item         Item        @relation(fields: [itemId], references: [id])
+  allocations Allocation[]
 }
 
 // 3. 在庫テーブル (Inventory)
@@ -52,6 +53,7 @@ model Inventory {
   createdAt    DateTime    @default(now())
 
   item         Item        @relation(fields: [itemId], references: [id])
+  allocations Allocation[]
 }
 
 // 4. 部品構成表テーブル (BOM: Bill of Materials)
@@ -76,4 +78,16 @@ model ProductionOrder {
   createdAt    DateTime    @default(now())
 
   item         Item        @relation(fields: [itemId], references: [id])
+}
+
+// 6. 在庫引き当て履歴テーブル (Allocation)
+model Allocation {
+  id          String    @id @default(uuid())
+  orderId     String    // 対象の受注ID
+  inventoryId String    // 引き当て元の在庫レコードID
+  quantity    Int       // 引き当て数量
+  createdAt   DateTime  @default(now())
+
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 }

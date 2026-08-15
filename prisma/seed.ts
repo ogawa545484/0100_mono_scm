@@ -9,7 +9,8 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // 古いデータをクリア
+  // 古いデータをクリア（参照関係があるため、依存されている子テーブルから順に消す）
+  await prisma.allocation.deleteMany(); // Order（受注）や Inventory（在庫）を参照しているため、これを先に削除
   await prisma.bom.deleteMany();
   await prisma.order.deleteMany();
   await prisma.inventory.deleteMany();
@@ -35,7 +36,26 @@ async function main() {
     data: { parentId: productA.id, childId: materialY.id, quantityRequired: 1 },
   });
 
-  // 3. 初期在庫の登録（フェーズ2の引き当てテスト用）
+  // 3. 初期在庫の登録
+  // --- 製品A（完成品）の在庫：FIFOテスト用に2つのロットを作成 ---
+  await prisma.inventory.create({
+    data: {
+      itemId: productA.id,
+      quantity: 30, // 古いロット（先に引き当てられるべき）
+      lotNumber: "LOT-A-001",
+      expirationDate: new Date("2026-09-30"),
+    },
+  });
+  await prisma.inventory.create({
+    data: {
+      itemId: productA.id,
+      quantity: 50, // 新しいロット
+      lotNumber: "LOT-A-002",
+      expirationDate: new Date("2026-12-31"),
+    },
+  });
+
+  // --- 原材料・部品の在庫 ---
   await prisma.inventory.create({
     data: { itemId: materialX.id, quantity: 150, lotNumber: "LOT-X-001", expirationDate: new Date("2026-12-31") },
   });
